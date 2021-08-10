@@ -6,7 +6,7 @@
 
 |                                                              |                                                              |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![](/home/super/PycharmProjects/Changeable/images/mosaic4.png) | ![](/home/super/PycharmProjects/Changeable/images/mosaic_with_transform4.png) |
+| ![](./images/mosaic4.png) | ![](./images/mosaic_with_transform4.png) |
 
 
 
