@@ -73,7 +73,7 @@ class Resize(object):
         image, boxes = image.copy(), boxes.copy()
         h, w, _ = image.shape
         image = Image.fromarray(np.uint8(image))
-        image = np.array(image.resize(size=self.size))
+        image = np.array(image.resize(size=self.size), dtype=np.float32)
         boxes[:, 0] = boxes[:, 0] / w * self.size[0]
         boxes[:, 1] = boxes[:, 1] / h * self.size[1]
         boxes[:, 2] = boxes[:, 2] / w * self.size[0]
@@ -93,8 +93,8 @@ class AdaptiveResize(object):
         self.value = value
 
     def __call__(self, image: ndarray, boxes: ndarray, labels: ndarray=None):
-        value = random.choice(self.value) if isinstance(self.value[0], tuple) else self.value
         image, boxes = image.copy(), boxes.copy()
+        value = random.choice(self.value) if isinstance(self.value[0], tuple) else self.value
         image, boxes = adaptive_resize(image, self.size, boxes, value)
         return image, boxes, labels
 
@@ -112,6 +112,7 @@ class Scaled(object):
         h, w, _ = image.shape
         image = Image.fromarray(np.uint8(image))
         image = image.resize(size=(int(w*scale), int(h*scale)))
+        image = np.array(image, dtype=np.float32)
         boxes = boxes * scale
         return image, boxes, labels
 
@@ -155,7 +156,7 @@ class SubtractMeans(object):
 
     def __call__(self, image: ndarray, boxes: ndarray=None, labels: ndarray=None) -> Tuple[ndarray, ndarray, ndarray]:
         image = image.copy() - self.mean
-        return image, boxes, labels
+        return image.astype(np.float32), boxes, labels
 
 class DivideStds(object):
     """除方差"""
@@ -187,7 +188,7 @@ class GaussNoise(object):
         scale = random.uniform(self.scale[0], self.scale[1]) if isinstance(self.scale, tuple) else self.scale
         image = image/255 + np.random.normal(0, scale=scale, size=image.shape)
         image = np.clip(image, 0, 1) * 255
-        return image, boxes, labels
+        return image.astype(np.float32), boxes, labels
 
 class SalePepperNoise(object):
     """添加椒盐噪声"""
@@ -202,17 +203,20 @@ class SalePepperNoise(object):
         self.sale = sale_scale
         self.pepper = pepper_scale
         self.probability = probability
-        assert 0 <= self.sale <= 1
-        assert 0 <= self.pepper <= 1
+        assert 0 <= np.min(self.sale) <= np.max(self.sale) <= 1
+        assert 0 <= np.min(self.pepper) <= np.max(self.pepper) <= 1
 
     def __call__(self, image: ndarray, boxes: ndarray=None, labels: ndarray=None) -> Tuple[ndarray, ndarray, ndarray]:
         image = image.copy()
         if random.uniform(0, 1) > self.probability:
             return image, boxes, labels
-        sale_mask = np.bool8(np.random.binomial(1, self.sale, size=image.shape[:2]))
-        pepper_mask = np.bool8(np.random.binomial(1, self.pepper, size=image.shape[:2]))
+        sale = random.uniform(self.sale[0], self.sale[1]) if isinstance(self.sale, tuple) else self.sale
+        pepper = random.uniform(self.pepper[0], self.pepper[1]) if isinstance(self.pepper, tuple) else self.pepper
+        sale_mask = np.bool8(np.random.binomial(1, sale, size=image.shape[:2]))
+        pepper_mask = np.bool8(np.random.binomial(1, pepper, size=image.shape[:2]))
         image[sale_mask] = 255
         image[pepper_mask] = 0
+
         return image, boxes, labels
 
 class GaussBlur(object):
@@ -296,11 +300,12 @@ class Cutout(object):
         cutouts = np.array([[max(0, x-cw), max(0, y-ch), min(x+cw, w), min(y+ch, h)] for x, y in zip(xs, ys)])
         covers = boxes_cover(boxes, cutouts)
         mask = np.max(covers, 1) < self.cover
+        if not np.all(mask):    # 无目标时，直接返回原数据
+            return image, boxes, labels
         for cutout in cutouts:
             image[cutout[1]:cutout[3], cutout[0]:cutout[2], :] = value
         boxes = boxes[mask]
         labels = labels[mask]
-
         return image, boxes, labels
 
 class RandomFlipLR(object):
@@ -311,9 +316,9 @@ class RandomFlipLR(object):
     def __call__(self, image: ndarray, boxes: ndarray, labels: ndarray=None) -> Tuple[ndarray, ndarray, ndarray]:
         if random.uniform(0, 1) > self.probability:
             return image, boxes, labels
+        image, boxes = image.copy(), boxes.copy()
         _, w, _ = image.shape
         image = image[:, ::-1]
-        boxes = boxes.copy()
         boxes[:, 0::2] = w - boxes[:, 2::-2]
         return image, boxes, labels
 
@@ -325,9 +330,9 @@ class RandomFlipUD(object):
     def __call__(self, image: ndarray, boxes: ndarray, labels: ndarray=None) -> Tuple[ndarray, ndarray, ndarray]:
         if random.uniform(0, 1) > self.probability:
             return image, boxes, labels
+        image, boxes = image.copy(), boxes.copy()
         h, _, _ = image.shape
         image = image[::-1]
-        boxes = boxes.copy()
         boxes[:, 1::2] = h - boxes[:, 3::-2]
         return image, boxes, labels
 
@@ -365,6 +370,7 @@ class ChangeContrast(object):
     def __call__(self, image: ndarray, boxes: ndarray=None, labels: ndarray=None) -> Tuple[ndarray, ndarray, ndarray]:
         if random.uniform(0, 1) > self.probability:
             return image, boxes, labels
+        image = image.copy()
         scale = random.uniform(self.scale[0], self.scale[1]) if isinstance(self.scale, tuple) else self.scale
         means = np.mean(image, axis=(0, 1), keepdims=True)
         image = (image-means) * scale + image
@@ -386,6 +392,7 @@ class ChangeHue(object):
     def __call__(self, image: ndarray, boxes: ndarray=None, labels: ndarray=None) -> Tuple[ndarray, ndarray, ndarray]:
         if random.uniform(0, 1) > self.probability:
             return image, boxes, labels
+        image = image.copy()
         scale = random.uniform(self.scale[0], self.scale[1]) if isinstance(self.scale, tuple) else self.scale
         image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         image[:, :, 0] = image[:, :, 0] + scale
@@ -407,8 +414,9 @@ class ChangeSaturation(object):
     def __call__(self, image: ndarray, boxes: ndarray=None, labels: ndarray=None) -> Tuple[ndarray, ndarray, ndarray]:
         if random.uniform(0, 1) > self.probability:
             return image, boxes, labels
+        image = image.copy()
         scale = random.uniform(self.scale[0], self.scale[1]) if isinstance(self.scale, tuple) else self.scale
-        image = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2HSV)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         image[:, :, 1] = image[:, :, 1] + scale
         image[:, :, 1] = np.clip(image[:, :, 1], 0, 1)
         image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
@@ -429,8 +437,9 @@ class ChangeBrightness(object):
     def __call__(self, image: ndarray, boxes: ndarray=None, labels: ndarray=None) -> Tuple[ndarray, ndarray, ndarray]:
         if random.uniform(0, 1) > self.probability:
             return image, boxes, labels
+        image = image.copy()
         scale = random.uniform(self.scale[0], self.scale[1]) if isinstance(self.scale, tuple) else self.scale
-        image = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2HSV) / 255
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV) / 255
         image[:, :, 2] = image[:, :, 2] + scale
         image[:, :, 2] = np.clip(image[:, :, 2], 0, 1)
         image = cv2.cvtColor(image*255, cv2.COLOR_HSV2BGR)

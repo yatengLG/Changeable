@@ -17,6 +17,7 @@ def adaptive_resize(image:ndarray, size: Tuple[int, int]=None, boxes:ndarray=Non
     :param value:
     :return:
     """
+    image = image.copy()
     h, w, _ = image.shape
     if size is not None:
         ratio = min(size[0]/w, size[1]/h)
@@ -25,7 +26,7 @@ def adaptive_resize(image:ndarray, size: Tuple[int, int]=None, boxes:ndarray=Non
         crop_l, crop_t = round((size[0]-rw)/2), round((size[1]-rh)/2)
         crop_r, crop_d = size[0]-crop_l-rw, size[1]-crop_t-rh
         image = ImageOps.expand(image, (crop_l, crop_t, crop_r, crop_d), value)
-        image = np.array(image)
+        image = np.array(image, dtype=np.float32)
 
         if boxes is not None:
             boxes = boxes.copy()
@@ -107,14 +108,14 @@ def crop_size(image: ndarray, boxes: ndarray, labels: ndarray, size: Tuple[int, 
             crop_r, crop_d = max(0, size[0] - crop_l - w), max(0, size[1] - crop_t - h)
             image = Image.fromarray(np.uint8(image))
             image = ImageOps.expand(image, (crop_l, crop_t, crop_r, crop_d), (114, 114, 114))
-            image = np.array(image)
+            image = np.array(image, dtype=np.float32)
             h, w, _ = image.shape
             boxes += (crop_l, crop_t, crop_r, crop_d)
         elif mode == 'resize':  # 保持宽高比，resize
             ratio = max(size[0] / w, size[1] / h)
             rw, rh = int(ratio * w)+1, int(ratio * h)+1
             image = Image.fromarray(np.uint8(image))
-            image = np.array(image.resize(size=(rw, rh)))
+            image = np.array(image.resize(size=(rw, rh)), dtype=np.float32)
             boxes[:, 0] = boxes[:, 0] / w * rw
             boxes[:, 1] = boxes[:, 1] / h * rh
             boxes[:, 2] = boxes[:, 2] / w * rw

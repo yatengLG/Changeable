@@ -2,7 +2,7 @@
 
 基于pytorch的目标检测数据增强工具包。
 
- **VOC格式数据集 **-> **transforms** -> **无限dotaloader** -> **mosaic数据增强** -> **anchors匹配** => **输出**：tuple(image[B, C, H, W], boxes[B, num_anchors * num_classes, 4], labels[B, num_anchors*num_classes], image_name[B])
+**VOC格式数据集 ** ->  **transforms**  ->  **无限dotaloader**  ->  **mosaic数据增强**  ->  **anchors匹配**  =>  **输出** : tuple(image[B, C, H, W], boxes[B, num_anchors * num_classes, 4], labels[B, num_anchors*num_classes], image_name[B])
 
 |                                                              |                                                              |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
@@ -65,6 +65,8 @@ mosaic图片生成，在dataloader中进行，因而可以在合成前，通过d
 
 ## AnchorsAssigner （anchors分配）
 
+**每个标注框都最少含有一个与之最接近的anchor**。
+
 ```python
 class AnchorsAssignerIOU(AnchorsAssigner):
     def __init__(self, anchors: AnchorsGenerator, threshold: float=0.6): 
@@ -93,11 +95,11 @@ class AnchorsAssignerWH(AnchorsAssigner):
 ```python
 class AnchorsGenerator(object):
     def __init__(self, 
-                 image_size: Tuple[int, int],														 # 输入图片尺寸
-                 feature_maps_size: Tuple[Tuple[int, int], ...],				   # 多层特征图尺寸
-                 anchors_size: Tuple[Tuple[Tuple[float, float], ...], ...],	  # 每层特征图上anchor尺寸
-                 form: str='xyxy',																				# xyxy or cxcywh
-                 clip: bool=True):																			   # 超出图片anchor是否截断
+                 image_size: Tuple[int, int],  # 输入图片尺寸
+                 feature_maps_size: Tuple[Tuple[int, int], ...],   # 多层特征图尺寸
+                 anchors_size: Tuple[Tuple[Tuple[float, float], ...], ...],  # 每层特征图上anchor尺寸
+                 form: str='xyxy',  # xyxy or cxcywh
+                 clip: bool=True):  # 超出图片anchor是否截断
                  
 ```
 
@@ -219,4 +221,74 @@ eg:
 | AdaptiveResize |                 size=(300, 300)                  |                 size=(300, 400)                  |                 size=(400, 300)                  |                 size=(400, 400)                  |
 |      缩放      |        ![](./images/Scaled_scale_0.5.png)        |        ![](./images/Scaled_scale_0.7.png)        |        ![](./images/Scaled_scale_1.0.png)        |        ![](./images/Scaled_scale_1.2.png)        |
 |     Scaled     |                    scale=0.5                     |                    scale=0.7                     |                    scale=1.0                     |                    scale=1.2                     |
+
+# example
+
+```python
+from changeable.dataset import VOCDataset
+from changeable.dataloader import dataloader
+from changeable.transforms import *
+from changeable.anchor import AnchorsAssignerWH, AnchorsGenerator
+from changeable.utils.display import draw_boxes, plot_image
+
+
+with open('classes.txt', 'r')as f:		# 类别名文件，每行一个类别名
+    lines = f.readlines()
+    classes_name = tuple([line.rstrip('\n') for line in lines])
+
+dataset = VOCDataset(root='voc_root',		# voc数据集根目录
+                     classes_name=classes_name,
+                     is_train=True,
+                     transforms=Compose([		# 这里添加了所有的数据增强方式，只做例子演示用。
+                         Resize((300, 300)),
+                         AdaptiveResize((300, 300)),
+                         Scaled(1.1),
+                         CropIou(0.5),
+                         CropSize((300, 300)),
+                         DivideStds((1,1,1)),
+                         SubtractMeans((0,0,0)),
+                         GaussNoise(),
+                         SalePepperNoise(),
+                         GaussBlur(),
+                         MotionBlue(),
+                         Cutout(),
+                         RandomFlipLR(),
+                         RandomFlipUD(),
+                         ShuffleChannels(),
+                         ChangeContrast(),
+                         ChangeHue(),
+                         ChangeBrightness(),
+                         ChangeSaturation(),
+                         ConvertBoxesToPercentage(),
+                         ConvertBoxesToValue(),
+                         ConvertBoxesForm('xyxy', 'cxcywh'),
+                         ConvertBoxesForm('cxcywh', 'xyxy'),
+                     ])
+                     )
+
+anchors = AnchorsGenerator(image_size=(600, 600),
+                           feature_maps_size=((76, 76), (38, 38), (19, 19)),
+                           anchors_size=(((10, 13), (16, 30), (33, 23)),
+                                         ((30, 61), (62, 45), (59, 119)),
+                                         ((116, 90), (156, 198), (373, 326))),
+                           form='xyxy',
+                           clip=True
+                           )
+
+anchors_assigner = AnchorsAssignerWH(anchors, 3)
+
+loader = dataloader(dataset, batch_size=4, resize=(600, 600),  use_mosaic=True, anchors_assigner=anchors_assigner, shuffle=True, num_workers=8)
+
+for i, (img, box, lab, ids) in enumerate(loader):
+    print(i)
+    print(img.size())
+    print(box.size())
+    print(lab.size())
+    img, box, lab, id = img[0], box[0], lab[0], ids[0]
+    img = img.permute((1, 2, 0)).numpy()
+    box, lab = box.numpy(), lab.numpy()
+    box, lab = box[lab>0], lab[lab>0]
+    img = draw_boxes(img, box, lab, label_name=classes_name)
+    plot_image(img)
+```
 

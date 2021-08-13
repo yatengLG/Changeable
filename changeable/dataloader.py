@@ -50,6 +50,7 @@ class MosaicBatchCollator:
         labels_batch = []
         ids_batch = []
         for img, box, lab, id in zip(images, boxes, labels, img_ids):
+            img, box, lab = img.copy(), box.copy(), lab.copy()
             if len(box) == 0:
                 raise ValueError('Pic {} has no object!')
             if self.size is not None:
