@@ -2,7 +2,7 @@
 
 基于pytorch的目标检测数据增强工具包。
 
-**VOC格式数据集 ** ->  **transforms**  ->  **无限dotaloader**  ->  **mosaic数据增强**  ->  **anchors匹配**  =>  **输出** : tuple(image[B, C, H, W], boxes[B, num_anchors * num_classes, 4], labels[B, num_anchors*num_classes], image_name[B])
+**VOC格式数据集** ->  **transforms**  ->  **无限dotaloader**  ->  **mosaic数据增强**  ->  **anchors匹配**  =>  **输出** : tuple(image[B, C, H, W], boxes[B, num_anchors * num_classes, 4], labels[B, num_anchors*num_classes], image_name[B])
 
 |                                                              |                                                              |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
