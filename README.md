@@ -9,7 +9,16 @@
 | ![](./images/mosaic4.png) | ![](./images/mosaic_with_transform4.png) |
 
 
+# install
 
+```bash
+
+pip install changeable
+```
+
+欢迎大家多提建议、bug。如果有想实现的数据增强方式，也可以提出来。
+
+一有时间就会更新。
 
 
 # Documentation
